@@ -83,8 +83,8 @@ func beginTheGame(con net.Conn) {
 	}
 	enemyMap := [][]rune{
 		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '■', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', 'X', '~', '~', '~', '~', '~'},
+		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
 		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
 		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
 		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
@@ -97,9 +97,9 @@ func beginTheGame(con net.Conn) {
 	// <--PLACE SHIPS-->
 
 	placeSmallShips(&myMap)
-	placeBigShip(2, 3, &myMap)
+	/*placeBigShip(2, 3, &myMap)
 	placeBigShip(3, 2, &myMap)
-	placeBigShip(4, 1, &myMap)
+	placeBigShip(4, 1, &myMap)*/
 	for {
 		_, err := con.Write([]byte("start"))
 		if err != nil {
@@ -132,7 +132,7 @@ func beginTheGame(con net.Conn) {
 
 func startGame(con net.Conn, myMap [][]rune, enemyMap [][]rune) (err error) {
 	var x, y byte
-	shipCount := 19
+	shipCount := countFoShips(&myMap)
 	readBuf := make([]byte, 2)
 	log := new(log)
 
@@ -145,25 +145,25 @@ func startGame(con net.Conn, myMap [][]rune, enemyMap [][]rune) (err error) {
 		fmt.Println("Enter coordinate(like A2) to shoot")
 		_, err = fmt.Scanf("%c%d", &readBuf[0], &readBuf[1])
 		if err != nil {
-			fmt.Println("Incorrect coordinate, try again")
+			log.add("Incorrect coordinate, try again")
 			continue
 		}
 		x = readBuf[0] - 'A'
 		y = readBuf[1] - 1
-		if y < 0 || y > 9 || x < 0 || x > 9 {
-			fmt.Println("Incorrect coordinate, try again")
+		if y < 0 || y > 9 || x < 0 || x > 9 || enemyMap[y][x] == '●' || enemyMap[y][x] == 'X' {
+			log.add("Incorrect coordinate, try again")
 			continue
 		}
 		_, err = con.Write([]byte{x, y})
 		if err != nil {
-			fmt.Println("Incorrect coordinate, try again")
+			log.add("Incorrect coordinate, try again")
 			continue
 		}
 		_, err = con.Read(readBuf)
 		if err != nil {
 			return err
 		}
-		_, err = con.Write(checkForHit(readBuf[0], readBuf[1], &myMap, &shipCount))
+		_, err = con.Write(checkForHit(readBuf[0], readBuf[1], &myMap, &shipCount, log))
 		if err != nil {
 			return err
 		}
@@ -187,20 +187,32 @@ func startGame(con net.Conn, myMap [][]rune, enemyMap [][]rune) (err error) {
 	}
 }
 
+func countFoShips(myMap *[][]rune) int {
+	count := 0
+	for _, j := range *myMap {
+		for _, i := range j {
+			if i == '■' {
+				count++
+			}
+		}
+	}
+	return count
+}
+
 func markTheHit(x byte, y byte, b byte, enemyMap *[][]rune, logs *log) bool {
 	switch b {
 	case 0:
 		//fmt.Printf("Miss for coordinate %c %d\n", x+'A', y+1)
-		logs.add(fmt.Sprintf("Miss for coordinate %c %d", x+'A', y+1))
+		logs.add(fmt.Sprintf("You -> Miss for coordinate %c%d", x+'A', y+1))
 		//fmt.Sprintf()
-		(*enemyMap)[y][x] = '○'
+		(*enemyMap)[y][x] = '●'
 	case 1:
 		//fmt.Printf("Destryed ship for coordinate %c %d\n", x+'A', y+1)
-		logs.add(fmt.Sprintf("Destryed ship for coordinate %c %d", x+'A', y+1))
+		logs.add(fmt.Sprintf("You -> Destry ship for coordinate %c%d", x+'A', y+1))
 		(*enemyMap)[y][x] = 'X'
 	case 2:
 		//fmt.Printf("Destryed ship for coordinate %c %d\n", x+'A', y+1)
-		logs.add(fmt.Sprintf("Destryed ship for coordinate %c %d", x+'A', y+1))
+		logs.add(fmt.Sprintf("You -> Destryed ship for coordinate %c%d", x+'A', y+1))
 		(*enemyMap)[y][x] = 'X'
 	case 4:
 		return true
@@ -209,9 +221,10 @@ func markTheHit(x byte, y byte, b byte, enemyMap *[][]rune, logs *log) bool {
 }
 
 // 0 - miss, 1 - destroy, 2 - hit, 4 - destroy all ships
-func checkForHit(x byte, y byte, myMap *[][]rune, shipCount *int) []byte {
-	switch (*myMap)[x][y] {
+func checkForHit(x byte, y byte, myMap *[][]rune, shipCount *int, logs *log) []byte {
+	switch (*myMap)[y][x] {
 	case '~', 'X':
+		logs.add(fmt.Sprintf("Enemy -> Missed your ship for coordinates %c%d", x+'A', y+1))
 		return []byte{0}
 	case '■':
 		*shipCount--
@@ -219,8 +232,10 @@ func checkForHit(x byte, y byte, myMap *[][]rune, shipCount *int) []byte {
 		if *shipCount == 0 {
 			return []byte{4}
 		} else if (x != 0 && (*myMap)[y][x-1] != '■') && (x != byte(len((*myMap)[0])-1) && (*myMap)[y][x+1] != '■') && (y != 0 && (*myMap)[y-1][x] != '■') && (y != byte(len(*myMap)-1) && (*myMap)[y+1][x] != '■') {
+			logs.add(fmt.Sprintf("Enemy -> Hit your ship for coordinates %c%d", x+'A', y+1))
 			return []byte{2}
 		} else {
+			logs.add(fmt.Sprintf("Enemy -> Destroy your ship for coordinates %c%d", x+'A', y+1))
 			return []byte{1}
 		}
 	default:
@@ -319,7 +334,7 @@ func abs(num int) byte {
 func placeSmallShips(myMap *[][]rune) {
 	var readBuf [2]byte
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 2; i++ {
 		outMaps(*myMap, nil, nil)
 		fmt.Println("Enter coordinates(example A1) for put small ship(1 cub):")
 		_, err := fmt.Scanf("%c%d", &readBuf[0], &readBuf[1])
@@ -357,6 +372,11 @@ func checkShipForValid(y byte, x byte, copyMap [][]rune) bool {
 }
 
 func outMaps(myMap [][]rune, enemyMap [][]rune, logs *log) {
+	fmt.Print("    YOUR MAP")
+	if enemyMap != nil {
+		fmt.Print("\t\t ENEMY MAP")
+	}
+	fmt.Println()
 	fmt.Print("  ")
 	for i := 0; i < 9; i++ {
 		fmt.Printf("%c ", 'A'+i)
@@ -366,6 +386,9 @@ func outMaps(myMap [][]rune, enemyMap [][]rune, logs *log) {
 		for i := 0; i < 9; i++ {
 			fmt.Printf("%c ", 'A'+i)
 		}
+	}
+	if logs != nil {
+		fmt.Print("\t\t\tFIGHT LOGS")
 	}
 	fmt.Println()
 	for s := 0; s < cap(myMap); s++ {

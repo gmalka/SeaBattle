@@ -12,8 +12,8 @@ func (s *log) add(newElement string) {
 		s.str[s.index] = newElement
 		s.index++
 	} else {
-		for i := 1; i < stackSize; i++ {
-			s.str[i] = s.str[i-1]
+		for i := 0; i < stackSize-1; i++ {
+			s.str[i] = s.str[i+1]
 		}
 		s.str[stackSize-1] = newElement
 	}
