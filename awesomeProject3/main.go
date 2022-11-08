@@ -70,37 +70,36 @@ func prepareTheGame(conInf connectionInfo) (err error) {
 }
 
 func beginTheGame(con net.Conn) {
-	myMap := [][]rune{
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-	}
-	enemyMap := [][]rune{
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
-	}
-	_ = enemyMap
-
-	// <--PLACE SHIPS-->
-
-	placeSmallShips(&myMap)
-	/*placeBigShip(2, 3, &myMap)
-	placeBigShip(3, 2, &myMap)
-	placeBigShip(4, 1, &myMap)*/
 	for {
+		myMap := [][]rune{
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+		}
+		enemyMap := [][]rune{
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+			{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
+		}
+
+		// <--PLACE SHIPS-->
+		placeSmallShips(&myMap, 1)
+		/*placeBigShip(2, 3, &myMap)
+		placeBigShip(3, 2, &myMap)
+		placeBigShip(4, 1, &myMap)*/
+
 		_, err := con.Write([]byte("start"))
 		if err != nil {
 			fmt.Println(err)
@@ -125,6 +124,37 @@ func beginTheGame(con net.Conn) {
 			if err != nil {
 				fmt.Println(err)
 				return
+			}
+			for {
+				fmt.Println("Play Again? Y/N")
+				n, err = os.Stdin.Read(buf)
+				if err != nil {
+					fmt.Println(err)
+					return
+				}
+				if buf[0] == 'Y' {
+					_, err = con.Write([]byte{1})
+					if err != nil {
+						fmt.Println(err)
+						return
+					}
+					err = con.SetReadDeadline(time.Now().Add(time.Second * 15))
+					if err != nil {
+						fmt.Println(err)
+						return
+					}
+					_, err = con.Read(buf)
+					if err != nil {
+						fmt.Println("Opponent dont answer")
+						return
+					}
+					if buf[0] == 1 {
+						break
+					}
+				}
+				if buf[0] == 'N' {
+					return
+				}
 			}
 		}
 	}
@@ -331,10 +361,10 @@ func abs(num int) byte {
 	return byte(num)
 }
 
-func placeSmallShips(myMap *[][]rune) {
+func placeSmallShips(myMap *[][]rune, shipCount int) {
 	var readBuf [2]byte
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < shipCount; i++ {
 		outMaps(*myMap, nil, nil)
 		fmt.Println("Enter coordinates(example A1) for put small ship(1 cub):")
 		_, err := fmt.Scanf("%c%d", &readBuf[0], &readBuf[1])
