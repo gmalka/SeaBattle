@@ -25,8 +25,7 @@ func main() {
 			fmt.Println(" -> Some instructions")
 			bufio.NewReader(os.Stdin).ReadBytes('\n')
 		case "run":
-			beginTheGame(nil)
-			/*con, err := tryToConnect()
+			con, err := tryToConnect()
 			if err != nil {
 				fmt.Println(err)
 				break
@@ -35,7 +34,7 @@ func main() {
 			if err != nil {
 				fmt.Println(err)
 				break
-			}*/
+			}
 		case "exit":
 			os.Exit(0)
 		}
@@ -93,6 +92,7 @@ func beginTheGame(con net.Conn) {
 		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
 		{'~', '~', '~', '~', '~', '~', '~', '~', '~'},
 	}
+	_ = enemyMap
 
 	// <--PLACE SHIPS-->
 
@@ -101,7 +101,18 @@ func beginTheGame(con net.Conn) {
 	placeBigShip(3, 2, &myMap)
 	placeBigShip(4, 1, &myMap)
 	for {
+		_, err := con.Write([]byte("start"))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 		buf := make([]byte, 100)
+		fmt.Println("Waiting for answer from opponent...")
+		err = con.SetReadDeadline(time.Now().Add(time.Second * 1080))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
 		n, err := con.Read(buf)
 		if err != nil {
 			fmt.Println(err)
@@ -110,18 +121,111 @@ func beginTheGame(con net.Conn) {
 		if string(buf[:n]) == "start" {
 			fmt.Println("starting the game")
 			time.Sleep(time.Second * 2)
-			err = startGame(con)
-			if err != nil
+			err = startGame(con, myMap, enemyMap)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
 		}
-		fmt.Println("Waiting...")
-		time.Sleep(time.Second * 3)
-		break
 	}
-	outMaps(myMap, enemyMap)
 }
 
-func startGame(con net.Conn) (err error) {
+func startGame(con net.Conn, myMap [][]rune, enemyMap [][]rune) (err error) {
+	var x, y byte
+	shipCount := 19
+	readBuf := make([]byte, 2)
+	log := new(log)
 
+	for {
+		outMaps(myMap, enemyMap, log)
+		err = con.SetReadDeadline(time.Now().Add(time.Second * 90))
+		if err != nil {
+			return
+		}
+		fmt.Println("Enter coordinate(like A2) to shoot")
+		_, err = fmt.Scanf("%c%d", &readBuf[0], &readBuf[1])
+		if err != nil {
+			fmt.Println("Incorrect coordinate, try again")
+			continue
+		}
+		x = readBuf[0] - 'A'
+		y = readBuf[1] - 1
+		if y < 0 || y > 9 || x < 0 || x > 9 {
+			fmt.Println("Incorrect coordinate, try again")
+			continue
+		}
+		_, err = con.Write([]byte{x, y})
+		if err != nil {
+			fmt.Println("Incorrect coordinate, try again")
+			continue
+		}
+		_, err = con.Read(readBuf)
+		if err != nil {
+			return err
+		}
+		_, err = con.Write(checkForHit(readBuf[0], readBuf[1], &myMap, &shipCount))
+		if err != nil {
+			return err
+		}
+		_, err = con.Read(readBuf)
+		if err != nil {
+			return err
+		}
+		if markTheHit(x, y, readBuf[0], &enemyMap, log) == true {
+			if shipCount == 0 {
+				fmt.Println("Draw in the game. No winners;)")
+				return err
+			} else {
+				fmt.Println("Congratulations, you are win!!!")
+				return err
+			}
+		}
+		if shipCount == 0 {
+			fmt.Println("Sorry, you lose(((")
+			return
+		}
+	}
+}
+
+func markTheHit(x byte, y byte, b byte, enemyMap *[][]rune, logs *log) bool {
+	switch b {
+	case 0:
+		//fmt.Printf("Miss for coordinate %c %d\n", x+'A', y+1)
+		logs.add(fmt.Sprintf("Miss for coordinate %c %d", x+'A', y+1))
+		//fmt.Sprintf()
+		(*enemyMap)[y][x] = '○'
+	case 1:
+		//fmt.Printf("Destryed ship for coordinate %c %d\n", x+'A', y+1)
+		logs.add(fmt.Sprintf("Destryed ship for coordinate %c %d", x+'A', y+1))
+		(*enemyMap)[y][x] = 'X'
+	case 2:
+		//fmt.Printf("Destryed ship for coordinate %c %d\n", x+'A', y+1)
+		logs.add(fmt.Sprintf("Destryed ship for coordinate %c %d", x+'A', y+1))
+		(*enemyMap)[y][x] = 'X'
+	case 4:
+		return true
+	}
+	return false
+}
+
+// 0 - miss, 1 - destroy, 2 - hit, 4 - destroy all ships
+func checkForHit(x byte, y byte, myMap *[][]rune, shipCount *int) []byte {
+	switch (*myMap)[x][y] {
+	case '~', 'X':
+		return []byte{0}
+	case '■':
+		*shipCount--
+		(*myMap)[y][x] = 'X'
+		if *shipCount == 0 {
+			return []byte{4}
+		} else if (x != 0 && (*myMap)[y][x-1] != '■') && (x != byte(len((*myMap)[0])-1) && (*myMap)[y][x+1] != '■') && (y != 0 && (*myMap)[y-1][x] != '■') && (y != byte(len(*myMap)-1) && (*myMap)[y+1][x] != '■') {
+			return []byte{2}
+		} else {
+			return []byte{1}
+		}
+	default:
+		return []byte{4}
+	}
 }
 
 func placeBigShip(shipSize int, shipCount int, myMap *[][]rune) {
@@ -129,9 +233,9 @@ func placeBigShip(shipSize int, shipCount int, myMap *[][]rune) {
 	copyMap := make([][]rune, len(*myMap))
 	copy(copyMap, *myMap)
 
-Label:
+OuterCycle:
 	for i := 0; i < shipCount; i++ {
-		outMaps(*myMap, nil)
+		outMaps(*myMap, nil, nil)
 		fmt.Println("Enter first coordinates(example A1) for put", shipSize, "cub ship:")
 		_, err := fmt.Scanf("%c%d", &readBuf[0], &readBuf[1])
 		if err != nil {
@@ -162,7 +266,7 @@ Label:
 				if checkShipForValid(readBuf[1]+byte(j)-1, readBuf[0]-'A', *myMap) == false {
 					fmt.Println("Ship cant be near other ship, try again!")
 					i--
-					continue Label
+					continue OuterCycle
 				}
 			}
 			for j := 0; j < shipSize; j++ {
@@ -173,7 +277,7 @@ Label:
 				if checkShipForValid(readBuf[1]-byte(j)-1, readBuf[0]-'A', *myMap) == false {
 					fmt.Println("Ship cant be near other ship, try again!")
 					i--
-					continue Label
+					continue OuterCycle
 				}
 			}
 			for j := 0; j < shipSize; j++ {
@@ -184,7 +288,7 @@ Label:
 				if checkShipForValid(readBuf[1]-1, readBuf[0]-'A'+byte(j), *myMap) == false {
 					fmt.Println("Ship cant be near other ship, try again!")
 					i--
-					continue Label
+					continue OuterCycle
 				}
 			}
 			for j := 0; j < shipSize; j++ {
@@ -195,7 +299,7 @@ Label:
 				if checkShipForValid(readBuf[1]-1, readBuf[0]-'A'-byte(j), *myMap) == false {
 					fmt.Println("Ship cant be near other ship, try again!")
 					i--
-					continue Label
+					continue OuterCycle
 				}
 			}
 			for j := 0; j < shipSize; j++ {
@@ -216,7 +320,7 @@ func placeSmallShips(myMap *[][]rune) {
 	var readBuf [2]byte
 
 	for i := 0; i < 4; i++ {
-		outMaps(*myMap, nil)
+		outMaps(*myMap, nil, nil)
 		fmt.Println("Enter coordinates(example A1) for put small ship(1 cub):")
 		_, err := fmt.Scanf("%c%d", &readBuf[0], &readBuf[1])
 		if err != nil {
@@ -225,7 +329,7 @@ func placeSmallShips(myMap *[][]rune) {
 			continue
 		}
 		if checkShipForValid(readBuf[1]-1, readBuf[0]-'A', *myMap) == false {
-			fmt.Println("Ship cant be near other ship, try again!")
+			fmt.Println("Ship cant be placed here, try again!")
 			i--
 			continue
 		}
@@ -252,7 +356,7 @@ func checkShipForValid(y byte, x byte, copyMap [][]rune) bool {
 	return true
 }
 
-func outMaps(myMap [][]rune, enemyMap [][]rune) {
+func outMaps(myMap [][]rune, enemyMap [][]rune, logs *log) {
 	fmt.Print("  ")
 	for i := 0; i < 9; i++ {
 		fmt.Printf("%c ", 'A'+i)
@@ -276,6 +380,10 @@ func outMaps(myMap [][]rune, enemyMap [][]rune) {
 			for _, t := range enemyMap[s] {
 				fmt.Printf("%c|", t)
 			}
+		}
+
+		if logs != nil {
+			fmt.Printf("\t|\t%s", logs.get(s))
 		}
 		fmt.Println()
 	}
