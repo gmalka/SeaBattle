@@ -20,6 +20,7 @@ func main() {
 	for {
 		fmt.Println(" -> Please enter 'run' for begin the game or '?' for help or 'exit' for out")
 		fmt.Scan(&command)
+
 		switch command {
 		case "?":
 			fmt.Println(" -> Some instructions")
@@ -95,10 +96,10 @@ func beginTheGame(con net.Conn) {
 		}
 
 		// <--PLACE SHIPS-->
-		/*placeSmallShips(&myMap, 4)
+		placeSmallShips(&myMap, 4)
 		placeBigShip(2, 3, &myMap)
 		placeBigShip(3, 2, &myMap)
-		placeBigShip(4, 1, &myMap)*/
+		placeBigShip(4, 1, &myMap)
 
 		_, err := con.Write([]byte("start"))
 		if err != nil {
@@ -176,7 +177,7 @@ func startGame(con net.Conn, myMap [][]rune, enemyMap [][]rune) (err error) {
 		fmt.Print("Coordinate(like A2) to shoot:")
 		_, err = fmt.Scanf("%c%d", &readBuf[0], &readBuf[1])
 		if readBuf[0] >= 'a' && readBuf[0] <= 'z' {
-			readBuf[0] -= 20
+			readBuf[0] -= 32
 		}
 		if err != nil {
 			log.add("Incorrect coordinate, try again")
@@ -240,7 +241,24 @@ func markTheHit(x byte, y byte, b byte, enemyMap *[][]rune, logs *log) bool {
 		(*enemyMap)[y][x] = '●'
 	case 1:
 		logs.add(fmt.Sprintf("You -> Destroy the ship by coordinate %c%d", x+'A', y+1))
-		(*enemyMap)[y][x] = '❌'
+		//Change symbol on enemy Map when ship destroy
+		(*enemyMap)[y][x] = '❎'
+		for y != 0 && (*enemyMap)[y-1][x] == '❌' {
+			(*enemyMap)[y-1][x] = '❎'
+			y--
+		}
+		for y != byte(len(*enemyMap)-1) && (*enemyMap)[y+1][x] == '❌' {
+			(*enemyMap)[y+1][x] = '❎'
+			y++
+		}
+		for x != 0 && (*enemyMap)[y][x-1] == '❌' {
+			(*enemyMap)[y][x-1] = '❎'
+			x--
+		}
+		for x != byte(len((*enemyMap)[y])-1) && (*enemyMap)[y][x+1] == '❌' {
+			(*enemyMap)[y][x+1] = '❎'
+			x++
+		}
 	case 2:
 		logs.add(fmt.Sprintf("You -> Hit the ship by coordinate %c%d", x+'A', y+1))
 		(*enemyMap)[y][x] = '❌'
@@ -281,26 +299,21 @@ func placeBigShip(shipSize int, shipCount int, myMap *[][]rune) {
 OuterCycle:
 	for i := 0; i < shipCount; i++ {
 		outMaps(*myMap, nil, nil)
-		fmt.Println("Enter first coordinates(example A1) for put", shipSize, "cub ship:")
-		_, err := fmt.Scanf("%c%d", &readBuf[0], &readBuf[1])
+		fmt.Println("Enter first coordinates(example A1A2) for put", shipSize, "cub ship:")
+		_, err := fmt.Scanf("%c%d%c%d", &readBuf[0], &readBuf[1], &readBuf[2], &readBuf[3])
+		if err != nil {
+			fmt.Println(err)
+			i--
+			continue
+		}
 		if readBuf[0] >= 'a' && readBuf[0] <= 'z' {
-			readBuf[0] -= 20
+			readBuf[0] -= 32
 		}
-		if err != nil {
-			fmt.Println(err)
-			i--
-			continue
-		}
-		fmt.Println("Enter second coordinates(example A2) for put", shipSize, "cub ship:")
-		_, err = fmt.Scanf("%c%d", &readBuf[2], &readBuf[3])
 		if readBuf[2] >= 'a' && readBuf[2] <= 'z' {
-			readBuf[2] -= 20
+			readBuf[2] -= 32
 		}
-		if err != nil {
-			fmt.Println(err)
-			i--
-			continue
-		}
+		/*fmt.Println("Enter second coordinates(example A2) for put", shipSize, "cub ship:")
+		_, err = fmt.Scanf("%c%d", &readBuf[2], &readBuf[3])*/
 		if readBuf[0] != readBuf[2] && readBuf[1] != readBuf[3] {
 			fmt.Println("Incorrect data, try again")
 			i--
@@ -375,7 +388,7 @@ func placeSmallShips(myMap *[][]rune, shipCount int) {
 		fmt.Println("Enter coordinates(example A1) for put small ship(1 cub):")
 		_, err := fmt.Scanf("%c%d", &readBuf[0], &readBuf[1])
 		if readBuf[0] >= 'a' && readBuf[0] <= 'z' {
-			readBuf[0] -= 20
+			readBuf[0] -= 32
 		}
 		if err != nil {
 			fmt.Println(err)
@@ -393,6 +406,9 @@ func placeSmallShips(myMap *[][]rune, shipCount int) {
 
 func checkShipForValid(y byte, x byte, copyMap [][]rune) bool {
 	if y < 0 || y > 9 || x < 0 || x > 9 {
+		return false
+	}
+	if copyMap[y][x] == '■' {
 		return false
 	}
 	if y != 0 && copyMap[y-1][x] == '■' {
