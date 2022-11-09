@@ -23,7 +23,17 @@ func main() {
 
 		switch command {
 		case "?":
-			fmt.Println(" -> Some instructions")
+			fmt.Println("Instruction:\n For begin the game follow instruction in the terminal.\n" +
+				" SeaBattle is the classic game with one opponent.\n In first part you and your opponent place a ships on the board." +
+				"\n Then You and your opponent mark a coordinate on the board, where you want to shoot." +
+				"\n The winner is the one who destroy all enemy ships. If you and your opponent destroy all of each other's ships, there will be a draw." +
+				"\n Notations:" +
+				"\n Empty space: ~ " +
+				"\n Damaged ship: ❌ " +
+				"\n Destroyed ship: ❎ " +
+				"\n Miss: ● " +
+				"\n Your ship: ■ " +
+				"\nPress Enter for continue")
 			bufio.NewReader(os.Stdin).ReadBytes('\n')
 		case "run":
 			con, err := tryToConnect()
@@ -168,7 +178,6 @@ func startGame(con net.Conn, myMap [][]rune, enemyMap [][]rune) (err error) {
 	log := new(log)
 
 	for {
-		//		log.add("Enter coordinate(like A2) to shoot")
 		outMaps(myMap, enemyMap, log)
 		err = con.SetReadDeadline(time.Now().Add(time.Second * 90))
 		if err != nil {
@@ -185,7 +194,7 @@ func startGame(con net.Conn, myMap [][]rune, enemyMap [][]rune) (err error) {
 		}
 		x = readBuf[0] - 'A'
 		y = readBuf[1] - 1
-		if y < 0 || y > 9 || x < 0 || x > 9 || enemyMap[y][x] == '●' || enemyMap[y][x] == '❌' {
+		if y < 0 || y > 9 || x < 0 || x > 9 || enemyMap[y][x] == '●' || enemyMap[y][x] == '❌' || enemyMap[y][x] == '❎' {
 			log.add("Incorrect coordinate, try again")
 			continue
 		}
